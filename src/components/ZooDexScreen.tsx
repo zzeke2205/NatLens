@@ -1,13 +1,16 @@
+import { supabase } from "@/lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { router } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
-    Alert,
-    Image,
-    Pressable,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from "react-native";
 
 const C = {
@@ -65,106 +68,132 @@ type Animal = {
   fact: string;
 };
 
-const ANIMALS: Animal[] = [
-  {
-    id: "1",
-    name: "Malayan Tiger",
-    scientific: "Panthera tigris jacksoni",
-    image: "https://images.unsplash.com/photo-1561731216-c3a4d99437d5?w=600",
-    status: "discovered",
-    category: "Mammal",
-    habitat: "Tropical forests",
-    fact: "The Malayan tiger is a powerful predator native to the Malay Peninsula.",
-  },
-  {
-    id: "2",
-    name: "Asian Elephant",
-    scientific: "Elephas maximus",
-    image: "https://images.unsplash.com/photo-1557050543-4d5f4e07ef46?w=600",
-    status: "discovered",
-    category: "Mammal",
-    habitat: "Forests and grasslands",
-    fact: "Asian elephants are intelligent, social animals that live in family groups.",
-  },
-  {
-    id: "3",
-    name: "Orangutan",
-    scientific: "Pongo pygmaeus",
-    image: "https://images.unsplash.com/photo-1564760055775-d63b17a55c44?w=600",
-    status: "discovered",
-    category: "Mammal",
-    habitat: "Tropical rainforests",
-    fact: "Orangutans are great apes known for their intelligence and tree-dwelling lifestyle.",
-  },
-  {
-    id: "4",
-    name: "Red Panda",
-    scientific: "Ailurus fulgens",
-    image: "https://images.unsplash.com/photo-1497752531616-c3afd9760a11?w=600",
-    status: "locked",
-    category: "Mammal",
-    habitat: "Mountain forests",
-    fact: "Red pandas spend much of their time in trees and mainly eat bamboo.",
-  },
-  {
-    id: "5",
-    name: "Giraffe",
-    scientific: "Giraffa camelopardalis",
-    image: "https://images.unsplash.com/photo-1547721064-da6cfb341d50?w=600",
-    status: "locked",
-    category: "Mammal",
-    habitat: "African savannas",
-    fact: "Giraffes are the tallest land animals and use their long tongues to feed on leaves.",
-  },
-  {
-    id: "6",
-    name: "Lion",
-    scientific: "Panthera leo",
-    image: "https://images.unsplash.com/photo-1546182990-dffeafbe841d?w=600",
-    status: "locked",
-    category: "Mammal",
-    habitat: "Grasslands and savannas",
-    fact: "Lions are social big cats that often live in groups called prides.",
-  },
-  {
-    id: "7",
-    name: "Flamingo",
-    scientific: "Phoenicopterus roseus",
-    image: "https://images.unsplash.com/photo-1497206365907-f5e630693df0?w=600",
-    status: "locked",
-    category: "Bird",
-    habitat: "Wetlands and lagoons",
-    fact: "Flamingos are wading birds recognised by their long legs and pink feathers.",
-  },
-  {
-    id: "8",
-    name: "Sea Turtle",
-    scientific: "Chelonia mydas",
-    image: "https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=600",
-    status: "locked",
-    category: "Reptile",
-    habitat: "Tropical oceans",
-    fact: "Sea turtles spend most of their lives in the ocean and return to beaches to nest.",
-  },
-];
-
 const FILTERS: CollectionFilter[] = ["All", "Discovered", "Locked"];
 
 export default function ZooDexScreen() {
   const [activeFilter, setActiveFilter] = useState<CollectionFilter>("All");
-
   const [activeCategory, setActiveCategory] = useState<CategoryFilter>("All");
-
   const [searchQuery, setSearchQuery] = useState("");
 
-  const discoveredCount = ANIMALS.filter(
+  const [animals, setAnimals] = useState<Animal[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    async function loadAnimals() {
+      setLoading(true);
+      setLoadError(null);
+
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("Failed to get session:", sessionError.message);
+        setLoadError("Unable to check your login session.");
+        setLoading(false);
+        return;
+      }
+
+      let discoveredIds = new Set<string>();
+
+      if (session) {
+        const { data: collection, error: collectionError } = await supabase
+          .from("user_species_collection")
+          .select("species_id")
+          .eq("user_id", session.user.id);
+
+        if (collectionError) {
+          console.error("Failed to load collection:", collectionError.message);
+          setLoadError("Unable to load your animal collection.");
+          setLoading(false);
+          return;
+        }
+
+        discoveredIds = new Set(
+          (collection ?? []).map((item) => item.species_id),
+        );
+      }
+
+      const { data, error } = await supabase
+        .from("species")
+        .select(
+          `
+          id,
+          common_name,
+          scientific_name,
+          habitat,
+          description,
+          cover_image_url,
+          category:species_categories(name)
+        `,
+        )
+        .eq("is_published", true)
+        .order("common_name");
+
+      if (error) {
+        console.error("Failed to load ZooDex animals:", error.message);
+        setLoadError("Unable to load animals. Please try again.");
+        setAnimals([]);
+        setLoading(false);
+        return;
+      }
+
+      const mappedAnimals: Animal[] = (data ?? []).map((species: any) => {
+        const categoryName = Array.isArray(species.category)
+          ? species.category[0]?.name
+          : species.category?.name;
+
+        const validCategory: AnimalCategory =
+          categoryName === "Bird" || categoryName === "Reptile"
+            ? categoryName
+            : "Mammal";
+
+        return {
+          id: species.id,
+          name: species.common_name,
+          scientific: species.scientific_name,
+          image:
+            species.cover_image_url ??
+            "https://placehold.co/600x600?text=Animal",
+          status: discoveredIds.has(species.id) ? "discovered" : "locked",
+          category: validCategory,
+          habitat: species.habitat ?? "Unknown habitat",
+          fact: species.description ?? "No description available yet.",
+        };
+      });
+
+      setAnimals(mappedAnimals);
+      setLoading(false);
+    }
+
+    loadAnimals();
+  }, [reloadKey]);
+
+  useEffect(() => {
+    async function checkSession() {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      console.log("ZooQuest session user:", session?.user?.id ?? null);
+      console.log("ZooQuest session error:", error?.message ?? null);
+    }
+
+    checkSession();
+  }, []);
+
+  const discoveredCount = animals.filter(
     (animal) => animal.status === "discovered",
   ).length;
 
   const filteredAnimals = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
 
-    return ANIMALS.filter((animal) => {
+    return animals.filter((animal) => {
       const matchesStatus =
         activeFilter === "All" || animal.status === activeFilter.toLowerCase();
 
@@ -178,7 +207,7 @@ export default function ZooDexScreen() {
 
       return matchesStatus && matchesCategory && matchesSearch;
     });
-  }, [activeFilter, activeCategory, searchQuery]);
+  }, [animals, activeFilter, activeCategory, searchQuery]);
 
   const handleAnimalPress = (animal: Animal) => {
     if (animal.status === "locked") {
@@ -187,15 +216,13 @@ export default function ZooDexScreen() {
         "Discover this animal by scanning its QR code or using the animal scanner.",
         [{ text: "Got it" }],
       );
-
       return;
     }
 
-    Alert.alert(
-      animal.name,
-      `${animal.scientific}\n\n${animal.fact}\n\nHabitat: ${animal.habitat}`,
-      [{ text: "Close" }],
-    );
+    router.push({
+      pathname: "/animal/[id]",
+      params: { id: animal.id },
+    });
   };
 
   return (
@@ -223,7 +250,7 @@ export default function ZooDexScreen() {
               <Text style={s.progressLabel}>Collection progress</Text>
 
               <Text style={s.progressCount}>
-                {discoveredCount} / {ANIMALS.length}
+                {discoveredCount} / {animals.length}
               </Text>
 
               <Text style={s.progressMessage}>Animals discovered!</Text>
@@ -239,7 +266,11 @@ export default function ZooDexScreen() {
               style={[
                 s.progressFill,
                 {
-                  width: `${(discoveredCount / ANIMALS.length) * 100}%`,
+                  width: `${
+                    animals.length > 0
+                      ? (discoveredCount / animals.length) * 100
+                      : 0
+                  }%`,
                 },
               ]}
             />
@@ -328,73 +359,109 @@ export default function ZooDexScreen() {
         </View>
 
         {/* Animal cards */}
-        <View style={s.animalGrid}>
-          {filteredAnimals.map((animal) => {
-            const isDiscovered = animal.status === "discovered";
+        {loading ? (
+          <ActivityIndicator
+            size="large"
+            color={C.teal}
+            style={{ marginVertical: 30 }}
+          />
+        ) : loadError ? (
+          <View style={{ alignItems: "center", marginVertical: 20 }}>
+            <Text style={{ color: C.orange, marginBottom: 10 }}>
+              {loadError}
+            </Text>
 
-            const colors =
-              animal.status === "discovered"
-                ? CATEGORY_COLORS[animal.category]
-                : LOCKED_COLORS;
+            <Pressable
+              onPress={() => setReloadKey((previous) => previous + 1)}
+              style={{
+                backgroundColor: C.teal,
+                paddingHorizontal: 18,
+                paddingVertical: 10,
+                borderRadius: 20,
+              }}
+            >
+              <Text style={{ color: C.white, fontWeight: "700" }}>
+                Try Again
+              </Text>
+            </Pressable>
+          </View>
+        ) : filteredAnimals.length === 0 ? (
+          <Text style={{ color: C.muted, marginVertical: 20 }}>
+            No animals found.
+          </Text>
+        ) : (
+          <View style={s.animalGrid}>
+            {filteredAnimals.map((animal) => {
+              const isDiscovered = animal.status === "discovered";
 
-            return (
-              <Pressable
-                key={animal.id}
-                onPress={() => handleAnimalPress(animal)}
-                style={({ pressed }) => [
-                  s.animalCard,
-                  {
-                    backgroundColor: colors.background,
-                    borderColor: colors.background,
-                  },
-                  pressed && s.pressedCard,
-                ]}
-              >
-                <View style={s.imageContainer}>
-                  <Image
-                    source={{ uri: animal.image }}
-                    style={[s.animalImage, !isDiscovered && s.lockedImage]}
-                    resizeMode="cover"
-                  />
+              const colors =
+                animal.status === "discovered"
+                  ? CATEGORY_COLORS[animal.category]
+                  : LOCKED_COLORS;
 
-                  {!isDiscovered && (
-                    <View style={s.lockOverlay}>
-                      <Ionicons name="lock-closed" size={25} color={C.white} />
-                    </View>
-                  )}
+              return (
+                <Pressable
+                  key={animal.id}
+                  onPress={() => handleAnimalPress(animal)}
+                  style={({ pressed }) => [
+                    s.animalCard,
+                    {
+                      backgroundColor: colors.background,
+                      borderColor: colors.background,
+                    },
+                    pressed && s.pressedCard,
+                  ]}
+                >
+                  <View style={s.imageContainer}>
+                    <Image
+                      source={{ uri: animal.image }}
+                      style={[s.animalImage, !isDiscovered && s.lockedImage]}
+                      resizeMode="cover"
+                    />
 
-                  {isDiscovered && (
-                    <View style={s.discoveredBadge}>
-                      <Ionicons name="checkmark" size={14} color={C.white} />
-                    </View>
-                  )}
-                </View>
+                    {!isDiscovered && (
+                      <View style={s.lockOverlay}>
+                        <Ionicons
+                          name="lock-closed"
+                          size={25}
+                          color={C.white}
+                        />
+                      </View>
+                    )}
 
-                <View style={s.animalInfo}>
-                  <Text
-                    style={[s.animalName, { color: colors.text }]}
-                    numberOfLines={1}
-                  >
-                    {isDiscovered ? animal.name : "Unknown Animal"}
-                  </Text>
+                    {isDiscovered && (
+                      <View style={s.discoveredBadge}>
+                        <Ionicons name="checkmark" size={14} color={C.white} />
+                      </View>
+                    )}
+                  </View>
 
-                  <Text
-                    style={[
-                      s.animalStatus,
-                      {
-                        color: colors.secondary,
-                        fontStyle: "italic",
-                      },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {isDiscovered ? animal.scientific : "Scan to unlock"}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
+                  <View style={s.animalInfo}>
+                    <Text
+                      style={[s.animalName, { color: colors.text }]}
+                      numberOfLines={1}
+                    >
+                      {isDiscovered ? animal.name : "Unknown Animal"}
+                    </Text>
+
+                    <Text
+                      style={[
+                        s.animalStatus,
+                        {
+                          color: colors.secondary,
+                          fontStyle: "italic",
+                        },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {isDiscovered ? animal.scientific : "Scan to unlock"}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
 
         <View style={s.bottomSpacing} />
       </View>
