@@ -2,6 +2,7 @@ import { discoverSpeciesFromQR } from "@/lib/speciesDiscovery";
 import { useState } from "react";
 import {
     Alert,
+    Image,
     ScrollView,
     StyleSheet,
     Text,
@@ -21,6 +22,8 @@ export default function AnimalScannerScreen({
   onOpenZooDex,
 }: AnimalScannerScreenProps) {
   const [qrScannerActive, setQrScannerActive] = useState(false);
+  const [discoveredSpecies, setDiscoveredSpecies] = useState<any>(null);
+  const [isAlreadyDiscovered, setIsAlreadyDiscovered] = useState(false);
 
   const handleQRCodeScanned = async (data: string) => {
     setQrScannerActive(false);
@@ -28,35 +31,8 @@ export default function AnimalScannerScreen({
     try {
       const result = await discoverSpeciesFromQR(data);
 
-      if (result.status === "discovered") {
-        Alert.alert(
-          "Animal Discovered!",
-          `${result.speciesName} has been added to your ZooDex.`,
-          [
-            {
-              text: "View ZooDex",
-              onPress: onOpenZooDex,
-            },
-            {
-              text: "OK",
-            },
-          ],
-        );
-      } else {
-        Alert.alert(
-          "Already Discovered",
-          `${result.speciesName} is already in your ZooDex.`,
-          [
-            {
-              text: "View ZooDex",
-              onPress: onOpenZooDex,
-            },
-            {
-              text: "OK",
-            },
-          ],
-        );
-      }
+      setDiscoveredSpecies(result.species);
+      setIsAlreadyDiscovered(result.status === "already_discovered");
     } catch (error: any) {
       console.error("Species discovery error:", error);
 
@@ -92,7 +68,58 @@ export default function AnimalScannerScreen({
         </Text>
       </View>
 
-      {qrScannerActive ? (
+      {discoveredSpecies ? (
+        <View style={styles.discoveryCard}>
+          <Text style={styles.discoveryIcon}>
+            {isAlreadyDiscovered ? "📖" : "🎉"}
+          </Text>
+
+          <Text style={styles.discoveryTitle}>
+            {isAlreadyDiscovered ? "Already Discovered!" : "Animal Discovered!"}
+          </Text>
+
+          {discoveredSpecies.cover_image_url ? (
+            <Image
+              source={{ uri: discoveredSpecies.cover_image_url }}
+              style={styles.animalImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Text style={styles.placeholderText}>🐘</Text>
+            </View>
+          )}
+
+          <Text style={styles.animalName}>{discoveredSpecies.common_name}</Text>
+
+          <Text style={styles.scientificName}>
+            {discoveredSpecies.scientific_name}
+          </Text>
+
+          <Text style={styles.discoveryDescription}>
+            {isAlreadyDiscovered
+              ? "This animal is already part of your ZooDex collection."
+              : "Congratulations! This animal has been added to your ZooDex collection."}
+          </Text>
+
+          {discoveredSpecies.description ? (
+            <Text style={styles.animalDescription}>
+              {discoveredSpecies.description}
+            </Text>
+          ) : null}
+
+          <TouchableOpacity style={styles.zooDexButton} onPress={onOpenZooDex}>
+            <Text style={styles.zooDexButtonText}>View My ZooDex</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.scanAgainButton}
+            onPress={() => setDiscoveredSpecies(null)}
+          >
+            <Text style={styles.scanAgainText}>Discover Another Animal</Text>
+          </TouchableOpacity>
+        </View>
+      ) : qrScannerActive ? (
         <AnimalScanner
           onCancel={() => setQrScannerActive(false)}
           onQRCodeScanned={handleQRCodeScanned}
@@ -241,10 +268,77 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: "center",
     marginTop: 4,
+    width: "100%",
   },
   zooDexButtonText: {
     color: "#FFFFFF",
     fontSize: 15,
     fontWeight: "800",
+  },
+  discoveryCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 22,
+    alignItems: "center",
+    gap: 14,
+    borderWidth: 1,
+    borderColor: "#E5EAE8",
+  },
+  discoveryIcon: {
+    fontSize: 42,
+  },
+  discoveryTitle: {
+    color: "#1C2B23",
+    fontSize: 23,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  animalImage: {
+    width: "100%",
+    height: 220,
+    borderRadius: 16,
+    backgroundColor: "#E5EAE8",
+  },
+  imagePlaceholder: {
+    width: "100%",
+    height: 180,
+    borderRadius: 16,
+    backgroundColor: "#E5EAE8",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  placeholderText: {
+    fontSize: 65,
+  },
+  animalName: {
+    color: "#1C2B23",
+    fontSize: 22,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  scientificName: {
+    color: "#8E9A94",
+    fontSize: 14,
+    fontStyle: "italic",
+  },
+  discoveryDescription: {
+    color: "#68766F",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 21,
+  },
+  animalDescription: {
+    color: "#68766F",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  scanAgainButton: {
+    padding: 12,
+  },
+  scanAgainText: {
+    color: "#34857B",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });

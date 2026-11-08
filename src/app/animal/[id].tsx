@@ -68,7 +68,18 @@ export default function AnimalInfoScreen() {
       const { data, error: queryError } = await supabase
         .from("species")
         .select(
-          "id, common_name, scientific_name, description, habitat, diet, average_height, average_weight, conservation_status, cover_image_url",
+          `
+            id,
+            common_name,
+            scientific_name,
+            description,
+            habitat,
+            diet,
+            average_height,
+            average_weight,
+            conservation_status,
+            cover_image_url
+        `,
         )
         .eq("id", id)
         .eq("is_published", true)

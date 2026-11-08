@@ -28,7 +28,7 @@ export async function discoverSpeciesFromQR(qrData: string) {
   // Check whether the species exists and is published.
   const { data: species, error: speciesError } = await supabase
     .from("species")
-    .select("id, common_name")
+    .select("id, common_name, scientific_name, description, cover_image_url")
     .eq("id", speciesId)
     .eq("is_published", true)
     .maybeSingle();
@@ -53,7 +53,7 @@ export async function discoverSpeciesFromQR(qrData: string) {
   if (insertError?.code === "23505") {
     return {
       status: "already_discovered" as const,
-      speciesName: species.common_name,
+      species,
     };
   }
 
@@ -63,6 +63,6 @@ export async function discoverSpeciesFromQR(qrData: string) {
 
   return {
     status: "discovered" as const,
-    speciesName: species.common_name,
+    species,
   };
 }
