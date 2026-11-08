@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AnimalScannerScreen from "../../components/AnimalScannerScreen";
 import ZooDexScreen from "../../components/ZooDexScreen";
 
 const C = {
@@ -204,9 +205,6 @@ export default function HomeScreen() {
           style={s.page}
           contentContainerStyle={{ paddingBottom: 28 }}
         >
-          <TouchableOpacity onPress={() => setAnimal(null)} style={s.back}>
-            <Text style={s.backText}>‹ Back</Text>
-          </TouchableOpacity>
           <Image
             source={{ uri: animal.image }}
             style={s.detailImage}
@@ -243,45 +241,13 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
       ) : subPage === "scan" ? (
-        <ScrollView style={s.page} contentContainerStyle={s.pad}>
-          <TouchableOpacity onPress={() => setSubPage(null)} style={s.back}>
-            <Text style={s.backText}>‹ Back</Text>
-          </TouchableOpacity>
-          <Heading
-            title="Scan an Animal"
-            subtitle="Choose how you want to discover wildlife."
-          />
-          <View style={s.scanPlaceholder}>
-            <Text style={{ fontSize: 54 }}>📷</Text>
-            <Text style={s.cardTitle}>Ready for your next discovery?</Text>
-            <Text style={s.bodyCenter}>
-              Camera permissions and real scanning will be connected later.
-            </Text>
-          </View>
-          <MenuRow
-            icon="▦"
-            title="Scan QR Code"
-            desc="Scan an animal's exhibit code"
-            onPress={() =>
-              Alert.alert("QR scanner", "QR scanning is not connected yet.")
-            }
-          />
-          <MenuRow
-            icon="✨"
-            title="Identify with Camera"
-            desc="Identify an animal using AI recognition"
-            onPress={() =>
-              Alert.alert(
-                "AI recognition",
-                "AI image recognition is not connected yet.",
-              )
-            }
-          />
-          <Text style={s.note}>
-            For now, open an animal from Home or ZooDex to test the animal
-            detail and collection flow.
-          </Text>
-        </ScrollView>
+        <AnimalScannerScreen
+          onBack={() => setSubPage(null)}
+          onOpenZooDex={() => {
+            setSubPage(null);
+            setTab("ZooDex");
+          }}
+        />
       ) : subPage === "visitor" ? (
         <ScrollView
           style={s.page}
@@ -1396,15 +1362,6 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
   },
-  scanPlaceholder: {
-    alignItems: "center",
-    padding: 25,
-    borderRadius: 22,
-    backgroundColor: C.pale,
-    marginBottom: 18,
-  },
-  back: { paddingHorizontal: 22, paddingVertical: 15, alignSelf: "flex-start" },
-  backText: { color: C.teal, fontSize: 16, fontWeight: "800" },
   detailImage: { width: "100%", height: 275, backgroundColor: "#EAEAEA" },
   detailTitle: {
     color: C.text,

@@ -36,7 +36,14 @@
       ],
       "expo-web-browser",
       "expo-sqlite",
-      "expo-image"
+      "expo-image",
+      [
+        "expo-camera",
+        {
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
